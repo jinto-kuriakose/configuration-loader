@@ -1,0 +1,33 @@
+<configuration>
+
+	<property name="LOG_FILE" value="configuration-loader.log" />
+
+	<appender name="FILE_CONFIGURATION_LOADER"
+		class="ch.qos.logback.core.rolling.RollingFileAppender">
+		<file>${LOG_FILE}</file>
+		<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+			<Pattern>
+				%d{yyyy-MM-dd HH:mm:ss} - %msg%n
+			</Pattern>
+		</encoder>
+
+		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+			<!-- rollover daily -->
+			<fileNamePattern>archived/debug.%d{yyyy-MM-dd}.%i.log
+			</fileNamePattern>
+			<timeBasedFileNamingAndTriggeringPolicy
+				class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+				<maxFileSize>10MB</maxFileSize>
+			</timeBasedFileNamingAndTriggeringPolicy>
+		</rollingPolicy>
+
+	</appender>
+
+	<logger name="com.twitter" level="info" additivity="false">
+		<appender-ref ref="FILE_CONFIGURATION_LOADER" />
+	</logger>
+
+	<root level="error">
+		<appender-ref ref="FILE_CONFIGURATION_LOADER" />
+	</root>
+</configuration>
