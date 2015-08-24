@@ -2,13 +2,14 @@ package com.twitter.configuration.loader;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import org.apache.commons.configuration.ConfigurationException;
-import org.apache.commons.configuration.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,12 +17,12 @@ import com.twitter.configuration.loader.domain.ConfigKeyValueMap;
 import com.twitter.configuration.loader.domain.ConfigValue;
 
 /**
- * A Simple Configuration Loader
+ * A Simple Configuration Loader.Load key and value as String.
  * 
  *
  *
  */
-public class ConfigurationLoader {
+public class ConfigurationLoader extends AbstractConfigurationLoader {
 
 	private static final Logger LOGGER = LoggerFactory
 			.getLogger(ConfigurationLoader.class);
@@ -38,11 +39,9 @@ public class ConfigurationLoader {
 	private static final int MAX_CACHED_ENTRIES = 1000;
 
 	/**
-	 * Assuming the number of section would be at least 75.
+	 * Assuming the number of group would be at least 75.
 	 */
 	private static final int SECTION_CACHE_INITIAL_SIZE = 100;
-
-	private FileSystem fileSystem = FileSystem.getDefaultFileSystem();
 
 	private MostRecentlyUsedConfigCache cache;
 
@@ -51,12 +50,18 @@ public class ConfigurationLoader {
 	private HashMap<String, Integer> overridesMap;
 
 	/**
-	 * Assuming path will be complete
+	 * Assuming configuration file path will be complete
 	 * 
 	 * @param path
 	 * @param overrides
+	 * @throws Exception
 	 */
-	public ConfigurationLoader(String path, String[] overrides) {
+	public ConfigurationLoader(String path, String[] overrides)
+			throws Exception {
+		LOGGER.info(
+				"Initializing ConfigurationLoader with config file={} and overrides={}",
+				path, overrides);
+
 		cache = new MostRecentlyUsedConfigCache(MAX_CACHED_ENTRIES);
 		configMap = new HashMap<String, ConfigKeyValueMap>(
 				SECTION_CACHE_INITIAL_SIZE);
@@ -66,6 +71,9 @@ public class ConfigurationLoader {
 
 	private void initializeOverrides(String[] overrides) {
 		int overridesSize = (null == overrides) ? 0 : overrides.length;
+
+		LOGGER.info("OverridesSize={}", overridesSize);
+
 		overridesMap = new HashMap<String, Integer>(overridesSize);
 		if (null != overrides) {
 			for (int i = 0; i < overridesSize; i++) {
@@ -74,19 +82,17 @@ public class ConfigurationLoader {
 		}
 	}
 
-	private void load(String path) {
-		try {
-			BufferedReader bufferedReader = new BufferedReader(
-					new InputStreamReader(fileSystem.getInputStream(new File(
-							path).toURI().toURL())));
-
+	private void load(String path) throws Exception {
+		try (BufferedReader bufferedReader = new BufferedReader(
+				new InputStreamReader(new FileInputStream(new File(path))))) {
 			String line = bufferedReader.readLine();
-			String section = "";
+			LOGGER.debug("contents = {}", line);
+			String group = "";
 			while (line != null) {
 				line = line.trim();
 				if (!isCommentLine(line)) {
-					if (isSectionLine(line)) {
-						section = line.substring(1, line.length() - 1);
+					if (isGroupLine(line)) {
+						group = line.substring(1, line.length() - 1);
 					} else {
 						String key = "";
 						String value = "";
@@ -96,10 +102,11 @@ public class ConfigurationLoader {
 							value = getConvertedValue(getParsedValue(line
 									.substring(index + 1)));
 							ConfigKeyValueMap keyValueMap = configMap
-									.get(section);
+									.get(group);
 							if (keyValueMap == null) {
+								LOGGER.info("Loading a new group : {}", group);
 								keyValueMap = new ConfigKeyValueMap();
-								configMap.put(section, keyValueMap);
+								configMap.put(group, keyValueMap);
 							}
 							addUpdateConfigValue(key, keyValueMap, value);
 						}
@@ -107,13 +114,19 @@ public class ConfigurationLoader {
 				}
 				line = bufferedReader.readLine();
 			}
-			bufferedReader.close();
-		} catch (ConfigurationException e) {
-			e.printStackTrace();
 		} catch (MalformedURLException e) {
-			e.printStackTrace();
+			LOGGER.error(
+					"Unparsable file path : {}. Failed to initialize configuraion loader",
+					path, e);
+			throw e;
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOGGER.error(
+					"Unable to read file={}. Failed to initialize configuraion loader",
+					path, e);
+			throw e;
+		} catch (Exception e) {
+			LOGGER.error("Failed to initialize configuraion loader", e);
+			throw e;
 		}
 	}
 
@@ -163,6 +176,9 @@ public class ConfigurationLoader {
 	}
 
 	/**
+	 * This method will first try to get the value from a most recently used
+	 * cache without doing any string operations on key. If failed then try to
+	 * get from master cache. Now master cache is loaded into memory.
 	 * 
 	 * @param key
 	 * @return null or associated string value
@@ -170,7 +186,6 @@ public class ConfigurationLoader {
 	public String get(String key) {
 		if (null == key || key.length() <= 0)
 			return null;
-
 		try {
 			String value = cache.get(key);
 			if (value != null) {
@@ -189,6 +204,13 @@ public class ConfigurationLoader {
 		}
 	}
 
+	/**
+	 * If configuration file is too big to keep in memory then in future this
+	 * could be from disk.
+	 * 
+	 * @param key
+	 * @return
+	 */
 	private String getInternal(String key) {
 		String[] keys = key.split("\\.");
 		if (keys.length <= 1) {
@@ -249,13 +271,13 @@ public class ConfigurationLoader {
 	}
 
 	/**
-	 * Determine if the given line is a section.
+	 * Determine if the given line is a group.
 	 *
 	 * @param line
 	 *            The line to check.
-	 * @return true if the line contains a secion
+	 * @return true if the line contains a group
 	 */
-	protected boolean isSectionLine(String line) {
+	private boolean isGroupLine(String line) {
 		if (line == null) {
 			return false;
 		}
@@ -276,5 +298,45 @@ public class ConfigurationLoader {
 		}
 		return line.length() < 1
 				|| COMMENT_CHARACTERS.indexOf(line.charAt(0)) >= 0;
+	}
+
+	/**
+	 * Not implemented
+	 * 
+	 * @param key
+	 * @return null
+	 */
+	public String[] getStringArray(String key) {
+		return null;
+	}
+
+	/**
+	 * Not implemented
+	 * 
+	 * @param key
+	 * @return
+	 */
+	public List<String> getStringList(String key) {
+		return null;
+	}
+
+	/**
+	 * Not implemented
+	 * 
+	 * @param key
+	 * @return
+	 */
+	public Boolean getBoolean(String key) {
+		return null;
+	}
+
+	/**
+	 * Not implemented
+	 * 
+	 * @param key
+	 * @return
+	 */
+	public Map<String, Object> getMap(String key) {
+		return null;
 	}
 }

@@ -6,7 +6,7 @@ package com.twitter.configuration.loader;
 import java.util.LinkedHashMap;
 
 /**
- * @author 
+ * @author
  *
  */
 public class MostRecentlyUsedConfigCache extends LinkedHashMap<String, String> {

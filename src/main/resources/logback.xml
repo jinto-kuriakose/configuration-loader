@@ -7,7 +7,7 @@
 		<file>${LOG_FILE}</file>
 		<encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
 			<Pattern>
-				%d{yyyy-MM-dd HH:mm:ss} - %msg%n
+				%d{yyyy-MM-dd HH:mm:ss} %-5level [%thread]: %c %-5msg%n
 			</Pattern>
 		</encoder>
 

@@ -1,9 +1,9 @@
 package com.twitter.configuration.loader;
 
-import java.net.URISyntaxException;
+import java.util.LinkedHashMap;
 
 import org.junit.Assert;
-import org.junit.BeforeClass;
+import org.junit.Before;
 import org.junit.Test;
 
 /**
@@ -11,17 +11,71 @@ import org.junit.Test;
  */
 public class ConfigurationLoaderTest {
 
-	private static ConfigurationLoader config;
+	private ConfigurationLoader config;
 
-	@BeforeClass
-	public static void init() {
+	@Before
+	public void init() {
+		try {
+			config = new ConfigurationLoader(ConfigurationLoaderTest.class
+					.getResource("/config.ini").toURI().getPath(),
+					new String[] { "test" });
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Test
+	public void testOverridePropertiesWithUnKnowOverride() {
 		try {
 			config = new ConfigurationLoader(ConfigurationLoader.class
 					.getResource("/config.ini").toURI().getPath(),
-					new String[] { "test" });
-		} catch (URISyntaxException e) {
+					new String[] { "test12121" });
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		Assert.assertEquals("/tmp/", config.get("ftp.path"));
+	}
+
+	@Test
+	public void testOverridePropertiesWithProductionOverride() {
+		try {
+			config = new ConfigurationLoader(ConfigurationLoader.class
+					.getResource("/config.ini").toURI().getPath(),
+					new String[] { "production" });
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		Assert.assertEquals("/srv/var/tmp/", config.get("ftp.path"));
+	}
+
+	@Test
+	public void testOverridePropertiesWithStagingOverride() {
+		try {
+			config = new ConfigurationLoader(ConfigurationLoader.class
+					.getResource("/config.ini").toURI().getPath(),
+					new String[] { "staging" });
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		Assert.assertEquals("/srv/uploads/", config.get("ftp.path"));
+	}
+
+	@Test
+	public void testOverridePropertiesWithUbuntuOverride() {
+		try {
+			config = new ConfigurationLoader(ConfigurationLoader.class
+					.getResource("/config.ini").toURI().getPath(),
+					new String[] { "ubuntu" });
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		Assert.assertEquals("/etc/var/uploads", config.get("ftp.path"));
+	}
+
+	@Test
+	public void testWithUnknownProperty() {
+		Assert.assertEquals(null,
+				config.get("common.unknownProperty_123456_789"));
 	}
 
 	@Test
@@ -52,16 +106,25 @@ public class ConfigurationLoaderTest {
 	}
 
 	@Test
-	public void testOverrideProperties() {
-		Assert.assertEquals("/etc/var/uploads", config.get("ftp.path"));
+	public void testGroupProperties() {
+
+		try {
+			config = new ConfigurationLoader(ConfigurationLoader.class
+					.getResource("/config.ini").toURI().getPath(),
+					new String[] { "production" });
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		LinkedHashMap<String, String> expected = new LinkedHashMap<String, String>(
+				3);
+		expected.put("enabled", "false");
+		expected.put("name", "hello there, ftp uploading");
+		expected.put("path", "/srv/var/tmp/");
+
+		Assert.assertEquals(expected.toString(), config.get("ftp"));
 	}
 
-	@Test
-	public void testSectionProperties() {
-		Assert.assertEquals(
-				"{path=/tmp/, path=/etc/var/uploads, name=hello there, ftp uploading, enabled=no}",
-				config.get("ftp"));
-	}
 	@Test
 	public void testPropertiesCache() {
 		Assert.assertEquals("2147483648",
